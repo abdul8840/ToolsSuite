@@ -10,6 +10,7 @@
     "lint": "eslint src --ext .js"
   },
   "dependencies": {
+    "@imgly/background-removal-node": "^1.4.5",
     "adm-zip": "^0.5.16",
     "archiver": "^7.0.1",
     "cloudinary": "^2.7.0",
@@ -28,6 +29,7 @@
     "nanoid": "^5.0.9",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1",
+    "pdf-to-img": "^6.2.0",
     "qrcode": "^1.5.4",
     "sanitize-filename": "^1.6.3",
     "sharp": "^0.33.5",

@@ -55,12 +55,50 @@ async function simpleCornerBackgroundRemove(input, outPath, tolerance = 36) {
   await sharp(data, { raw: info }).png().toFile(outPath);
 }
 
+async function aiBackgroundRemove(input, outPath) {
+  const { removeBackground } = await import("@imgly/background-removal-node");
+  const source = await fs.readFile(input);
+  const result = await removeBackground(source, {
+    model: "medium",
+    output: { format: "image/png", quality: 1, type: "foreground" }
+  });
+  await fs.writeFile(outPath, Buffer.from(await result.arrayBuffer()));
+}
+
+async function rasterCompressPdf(inputPath, outPath, preset) {
+  const { pdf: renderPdf } = await import("pdf-to-img");
+  const settings = {
+    screen: { scale: 1, quality: 42 },
+    ebook: { scale: 1.35, quality: 58 },
+    printer: { scale: 1.75, quality: 72 },
+    prepress: { scale: 2, quality: 82 }
+  }[preset];
+  const sourcePdf = await PDFDocument.load(await fs.readFile(inputPath));
+  const sourcePages = sourcePdf.getPages();
+  const rendered = await renderPdf(inputPath, { scale: settings.scale });
+  const compressed = await PDFDocument.create();
+  let index = 0;
+  try {
+    for await (const png of rendered) {
+      const jpegBytes = await sharp(png).jpeg({ quality: settings.quality, mozjpeg: true }).toBuffer();
+      const image = await compressed.embedJpg(jpegBytes);
+      const size = sourcePages[index]?.getSize() || { width: image.width, height: image.height };
+      const page = compressed.addPage([size.width, size.height]);
+      page.drawImage(image, { x: 0, y: 0, width: size.width, height: size.height });
+      index += 1;
+    }
+  } finally {
+    await rendered.destroy();
+  }
+  await savePdf(compressed, outPath);
+}
+
 export const toolCatalog = [
   { slug: "image-to-pdf", title: "Image to PDF", category: "PDF", accepts: ["image/*"], multiple: true, description: "Combine JPG, PNG, WebP, TIFF or BMP images into a single PDF." },
   { slug: "pdf-to-images", title: "PDF to Images", category: "PDF", accepts: ["application/pdf"], multiple: false, description: "Export every PDF page as PNG or JPEG images." },
   { slug: "pdf-to-word", title: "PDF to Word", category: "PDF", accepts: ["application/pdf"], multiple: false, description: "Extract PDF text into an editable DOCX document." },
   { slug: "word-to-pdf", title: "Word to PDF", category: "Documents", accepts: [".doc,.docx"], multiple: false, description: "Convert Word documents to PDF with local LibreOffice." },
-  { slug: "bg-remover", title: "Background Remover", category: "Images", accepts: ["image/*"], multiple: false, description: "Remove simple backgrounds locally; uses optional local rembg if installed." },
+  { slug: "bg-remover", title: "Background Remover", category: "Images", accepts: ["image/*"], multiple: false, description: "Remove image backgrounds with local AI and export a transparent PNG." },
   { slug: "compress-pdf", title: "Compress PDF", category: "Compression", accepts: ["application/pdf"], multiple: false, description: "Reduce PDF size using local Ghostscript." },
   { slug: "compress-word", title: "Compress Word", category: "Compression", accepts: [".docx"], multiple: false, description: "Repackage DOCX with maximum ZIP compression." },
   { slug: "compress-image", title: "Compress Image", category: "Compression", accepts: ["image/*"], multiple: false, description: "Compress JPG, PNG, WebP, AVIF or TIFF images." },
@@ -136,11 +174,18 @@ export const toolHandlers = {
     const outPath = path.join(workDir, "background-removed.png");
     const tolerance = numberOption(options, "tolerance", 36, 1, 160);
     try {
-      await assertBinary("rembg", "Optional: pip install rembg. The built-in fallback still works for plain backgrounds.");
-      await runBinary("rembg", ["i", files[0].path, outPath], { timeout: 240000 });
-    } catch {
-      await simpleCornerBackgroundRemove(files[0].path, outPath, tolerance);
+      const rembg = await findBinary(["rembg"]);
+      if (rembg) await runBinary(rembg, ["i", files[0].path, outPath], { timeout: 240000 });
+      else await aiBackgroundRemove(files[0].path, outPath);
+    } catch (error) {
+      try {
+        await simpleCornerBackgroundRemove(files[0].path, outPath, tolerance);
+      } catch {
+        throw error;
+      }
     }
+    await sharp(outPath).ensureAlpha().png({ compressionLevel: 9 }).toFile(`${outPath}.png`);
+    await fs.rename(`${outPath}.png`, outPath);
     return output(outPath, "background-removed.png", "image/png");
   },
 
@@ -148,7 +193,12 @@ export const toolHandlers = {
     requireFiles(files, 1); requireExt(files[0], [".pdf"]);
     const preset = stringOption(options, "preset", "ebook", ["screen", "ebook", "printer", "prepress"]);
     const outPath = path.join(workDir, "compressed.pdf");
-    await runBinary("gs", ["-sDEVICE=pdfwrite", "-dCompatibilityLevel=1.4", `-dPDFSETTINGS=/${preset}`, "-dNOPAUSE", "-dQUIET", "-dBATCH", `-sOutputFile=${outPath}`, files[0].path], { hint: "Install Ghostscript.", timeout: 180000 });
+    const ghostscript = await findBinary(process.platform === "win32" ? ["gswin64c", "gswin32c", "gs"] : ["gs"]);
+    if (ghostscript) {
+      await runBinary(ghostscript, ["-sDEVICE=pdfwrite", "-dCompatibilityLevel=1.4", `-dPDFSETTINGS=/${preset}`, "-dNOPAUSE", "-dQUIET", "-dBATCH", `-sOutputFile=${outPath}`, files[0].path], { hint: "Install Ghostscript.", timeout: 180000 });
+    } else {
+      await rasterCompressPdf(files[0].path, outPath, preset);
+    }
     return output(outPath, "compressed.pdf", "application/pdf");
   },
 
@@ -156,6 +206,15 @@ export const toolHandlers = {
     requireFiles(files, 1); requireExt(files[0], [".docx"]);
     const zip = new AdmZip(files[0].path);
     const outPath = path.join(workDir, "compressed.docx");
+    for (const entry of zip.getEntries().filter((item) => /^word\/media\//i.test(item.entryName))) {
+      const extension = path.extname(entry.entryName).toLowerCase();
+      if (![".jpg", ".jpeg", ".png"].includes(extension)) continue;
+      const pipeline = sharp(entry.getData()).rotate().resize({ width: 2000, height: 2000, fit: "inside", withoutEnlargement: true });
+      const optimized = extension === ".png"
+        ? await pipeline.png({ compressionLevel: 9, palette: true, quality: 75 }).toBuffer()
+        : await pipeline.jpeg({ quality: 68, mozjpeg: true }).toBuffer();
+      if (optimized.length < entry.header.size) zip.updateFile(entry.entryName, optimized);
+    }
     zip.writeZip(outPath);
     return output(outPath, "compressed.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
   },
