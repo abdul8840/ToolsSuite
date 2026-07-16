@@ -5,6 +5,7 @@ import { apiLimiter, corsMiddleware, helmetMiddleware } from "./middleware/secur
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 import { toolsRouter } from "./routes/tools.routes.js";
 import { robots, sitemap } from "./controllers/tools.controller.js";
+import { cloudinaryStatus } from "./services/cloudinary.js";
 
 export const app = express();
 
@@ -20,7 +21,7 @@ app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 app.use(apiLimiter);
 
 app.get("/health", (_req, res) => {
-  res.json({ success: true, status: "ok", timestamp: new Date().toISOString() });
+  res.json({ success: true, status: "ok", storage: cloudinaryStatus(), timestamp: new Date().toISOString() });
 });
 
 app.get("/sitemap.xml", sitemap);

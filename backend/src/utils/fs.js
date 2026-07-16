@@ -31,9 +31,10 @@ export async function cleanup(paths = []) {
 export async function findBinary(candidates) {
   for (const binary of candidates) {
     try {
-      const { stdout } = await execFileAsync("sh", ["-lc", `command -v ${binary}`], { timeout: 5000 });
+      const locator = process.platform === "win32" ? "where.exe" : "which";
+      const { stdout } = await execFileAsync(locator, [binary], { timeout: 5000 });
       const resolved = stdout.trim();
-      if (resolved) return resolved;
+      if (resolved) return resolved.split(/\r?\n/)[0];
     } catch {
       // try next candidate
     }

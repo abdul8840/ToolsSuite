@@ -11,7 +11,11 @@ const envSchema = z.object({
   MAX_UPLOAD_MB: z.coerce.number().default(50),
   MAX_FILES: z.coerce.number().default(20),
   TMP_DIR: z.string().default("./storage/tmp"),
-  PUBLIC_BASE_URL: z.string().default("http://localhost:5000")
+  PUBLIC_BASE_URL: z.string().default("http://localhost:5000"),
+  CLOUDINARY_CLOUD_NAME: z.string().min(1).optional(process.env.CLOUDINARY_CLOUD_NAME ? { message: "CLOUDINARY_CLOUD_NAME is required when using Cloudinary" } : undefined),
+  CLOUDINARY_API_KEY: z.string().min(1).optional(process.env.CLOUDINARY_API_KEY ? { message: "CLOUDINARY_API_KEY is required when using Cloudinary" } : undefined),
+  CLOUDINARY_API_SECRET: z.string().min(1).optional(process.env.CLOUDINARY_API_SECRET ? { message: "CLOUDINARY_API_SECRET is required when using Cloudinary" } : undefined),
+  CLOUDINARY_FOLDER: z.string().min(1).default(process.env.CLOUDINARY_FOLDER || "tools-suite"),
 });
 
 export const env = envSchema.parse(process.env);

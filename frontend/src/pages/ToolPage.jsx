@@ -43,7 +43,8 @@ export default function ToolPage() {
     setMessage(null);
 
     try {
-      if (hasFileInput && files.length === 0) throw new Error("Please upload a file first.");
+      const acceptsTypedHtml = tool.slug === "html-to-pdf" && options.html?.trim();
+      if (hasFileInput && files.length === 0 && !acceptsTypedHtml) throw new Error("Please upload a file first.");
       const formData = new FormData();
       Array.from(files).forEach((file) => formData.append("files", file));
       formData.append("options", JSON.stringify(options));

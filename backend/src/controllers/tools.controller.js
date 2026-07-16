@@ -6,6 +6,7 @@ import { validateUploadedFiles } from "../middleware/upload.js";
 import { hashIp } from "../middleware/security.js";
 import { runTool, toolCatalog } from "../services/tools.js";
 import { ValidationError } from "../utils/errors.js";
+import { uploadToCloudinary } from "../services/cloudinary.js";
 
 export async function listTools(_req, res) {
   res.json({ success: true, count: toolCatalog.length, tools: toolCatalog });
@@ -41,14 +42,25 @@ export async function runToolController(req, res, next) {
       userAgent: req.get("user-agent")
     }).catch(() => null);
 
+    const inputAssets = await Promise.all(uploadedFiles.map(async (file) => {
+      const asset = await uploadToCloudinary(file.path, { jobId: auditJobId, kind: "inputs", filename: file.originalname });
+      return { publicId: asset.public_id, url: asset.secure_url, originalName: file.originalname };
+    }));
+    if (jobDoc) {
+      jobDoc.inputAssets = inputAssets;
+      await jobDoc.save().catch(() => undefined);
+    }
+
     result = await runTool(slug, { files: uploadedFiles, options });
     const bytes = await fileSize(result.outPath);
+    const outputAsset = await uploadToCloudinary(result.outPath, { jobId: auditJobId, kind: "results", filename: result.filename });
 
     if (jobDoc) {
       jobDoc.status = "success";
       jobDoc.outputName = result.filename;
       jobDoc.outputBytes = bytes;
       jobDoc.durationMs = Date.now() - startedAt;
+      jobDoc.outputAsset = { publicId: outputAsset.public_id, url: outputAsset.secure_url };
       await jobDoc.save().catch(() => undefined);
     }
 

@@ -5,7 +5,8 @@
 - Put the `web` container behind Cloudflare/Nginx/ALB with HTTPS.
 - Keep `api` and `mongo` private; expose only the web proxy.
 - Set `CLIENT_ORIGIN` to your real HTTPS domain.
-- Mount temporary storage on a partition with enough space and scheduled cleanup.
+- Configure the Cloudinary credentials and a dedicated `CLOUDINARY_FOLDER`.
+- Keep `TMP_DIR` ephemeral (the Docker configuration uses `tmpfs`).
 - Use MongoDB auth in real deployments.
 
 ## File processing
@@ -25,7 +26,7 @@ The API currently processes requests synchronously and streams the output. For h
 
 1. Move processing into worker jobs.
 2. Add Redis/BullMQ.
-3. Store outputs in private object storage with signed URLs.
+3. Configure Cloudinary authenticated delivery if processed files must be private.
 4. Add ClamAV scanning for uploaded files.
 5. Add user accounts and quotas if needed.
 

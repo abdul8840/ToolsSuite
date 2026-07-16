@@ -233,7 +233,7 @@ export const toolHandlers = {
     const angle = numberOption(options, "angle", 90, 0, 360);
     if (![0, 90, 180, 270, 360].includes(angle)) throw new ValidationError("Angle must be 0, 90, 180, 270 or 360");
     const pdf = await PDFDocument.load(await fs.readFile(files[0].path));
-    pdf.getPages().forEach((page) => page.setRotation(degrees(angle)));
+    pdf.getPages().forEach((page) => page.setRotation(degrees((page.getRotation().angle + angle) % 360)));
     const outPath = path.join(workDir, "rotated.pdf");
     await savePdf(pdf, outPath);
     return output(outPath, "rotated.pdf", "application/pdf");

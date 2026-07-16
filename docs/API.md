@@ -19,6 +19,8 @@ Production behind web proxy: same-origin `/api`
 
 Content type: `multipart/form-data`
 
+Source files and completed outputs are saved in the configured Cloudinary folder. The HTTP response remains the generated file so existing clients can download it directly.
+
 Fields:
 
 - `files`: one or more uploaded files, depending on the tool

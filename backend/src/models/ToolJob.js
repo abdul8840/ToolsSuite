@@ -8,6 +8,8 @@ const ToolJobSchema = new mongoose.Schema(
     inputCount: { type: Number, default: 0 },
     outputName: String,
     outputBytes: Number,
+    inputAssets: [{ publicId: String, url: String, originalName: String }],
+    outputAsset: { publicId: String, url: String },
     ipHash: String,
     userAgent: String,
     errorCode: String,
