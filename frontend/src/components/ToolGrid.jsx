@@ -17,11 +17,11 @@ export default function ToolGrid() {
   return (
     <section className="tools-section" id="tools">
       <div className="section-heading">
-        <p className="eyebrow">24 production tools</p>
-        <h2>All conversion APIs run on your own server</h2>
+        <div><p className="eyebrow">24 free online tools</p><h2>What do you want to do?</h2></div>
+        <span className="result-count">{filtered.length} tools</span>
       </div>
       <div className="filters" role="search">
-        <input aria-label="Search tools" placeholder="Search PDF, image, Word, OCR..." value={query} onChange={(event) => setQuery(event.target.value)} />
+        <input aria-label="Search tools" placeholder="Search tools—PDF, image, Word, OCR..." value={query} onChange={(event) => setQuery(event.target.value)} />
         <select aria-label="Filter category" value={category} onChange={(event) => setCategory(event.target.value)}>
           {categories.map((item) => <option key={item}>{item}</option>)}
         </select>

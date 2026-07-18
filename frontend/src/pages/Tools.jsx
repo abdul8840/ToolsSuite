@@ -8,7 +8,7 @@ export default function Tools() {
       <div className="page-title">
         <p className="eyebrow">Tool directory</p>
         <h1>Choose a tool</h1>
-        <p>Every operation is handled by your own local API.</p>
+        <p>Fast, secure utilities for documents and images. Free to use without creating an account.</p>
       </div>
       <ToolGrid />
     </>

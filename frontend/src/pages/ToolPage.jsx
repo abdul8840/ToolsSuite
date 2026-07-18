@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Download, Loader2, ShieldCheck, UploadCloud } from "lucide-react";
+import { ArrowLeft, Download, File, FileText, Image, Loader2, Plus, ShieldCheck, Trash2, UploadCloud } from "lucide-react";
 import SEO from "../components/SEO.jsx";
 import { tools } from "../data/tools.js";
 
@@ -18,13 +18,32 @@ function getFilename(contentDisposition, fallback) {
   return regular?.[1] || fallback;
 }
 
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+}
+
 export default function ToolPage() {
   const { slug } = useParams();
   const tool = useMemo(() => tools.find((item) => item.slug === slug), [slug]);
   const [files, setFiles] = useState([]);
+  const inputRef = useRef(null);
+  const filesRef = useRef([]);
   const [options, setOptions] = useState(() => initialOptions(tool?.fields || []));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
+
+  useEffect(() => { filesRef.current = files; }, [files]);
+  useEffect(() => () => filesRef.current.forEach((item) => item.preview && URL.revokeObjectURL(item.preview)), []);
+  useEffect(() => {
+    setFiles((current) => {
+      current.forEach((item) => item.preview && URL.revokeObjectURL(item.preview));
+      return [];
+    });
+    setOptions(initialOptions(tool?.fields || []));
+    setMessage(null);
+  }, [slug, tool]);
 
   if (!tool) {
     return (
@@ -37,6 +56,36 @@ export default function ToolPage() {
 
   const hasFileInput = Boolean(tool.accept);
 
+  function addFiles(fileList) {
+    const incoming = Array.from(fileList || []).map((file) => ({
+      id: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
+      file,
+      preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : null
+    }));
+    if (!incoming.length) return;
+    setFiles((current) => {
+      if (!tool.multiple) {
+        current.forEach((item) => item.preview && URL.revokeObjectURL(item.preview));
+        return [incoming[0]];
+      }
+      const existing = new Set(current.map((item) => `${item.file.name}-${item.file.size}-${item.file.lastModified}`));
+      const unique = incoming.filter((item) => {
+        const duplicate = existing.has(`${item.file.name}-${item.file.size}-${item.file.lastModified}`);
+        if (duplicate && item.preview) URL.revokeObjectURL(item.preview);
+        return !duplicate;
+      });
+      return [...current, ...unique];
+    });
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
+  function removeFile(id) {
+    setFiles((current) => current.filter((item) => {
+      if (item.id === id && item.preview) URL.revokeObjectURL(item.preview);
+      return item.id !== id;
+    }));
+  }
+
   async function submit(event) {
     event.preventDefault();
     setBusy(true);
@@ -46,7 +95,7 @@ export default function ToolPage() {
       const acceptsTypedHtml = tool.slug === "html-to-pdf" && options.html?.trim();
       if (hasFileInput && files.length === 0 && !acceptsTypedHtml) throw new Error("Please upload a file first.");
       const formData = new FormData();
-      Array.from(files).forEach((file) => formData.append("files", file));
+      files.forEach((item) => formData.append("files", item.file));
       formData.append("options", JSON.stringify(options));
 
       const response = await fetch(`${API_URL}/api/tools/${tool.slug}`, { method: "POST", body: formData });
@@ -79,7 +128,7 @@ export default function ToolPage() {
 
   return (
     <>
-      <SEO title={tool.title} description={tool.description} path={`/tools/${tool.slug}`} />
+      <SEO title={tool.title} description={tool.description} path={`/tools/${tool.slug}`} tool={tool} />
       <section className="tool-detail">
         <Link to="/tools" className="back-link"><ArrowLeft size={18} /> Back to tools</Link>
         <div className="tool-detail-card">
@@ -88,23 +137,34 @@ export default function ToolPage() {
             <h1>{tool.title}</h1>
             <p>{tool.description}</p>
             <ul className="trust-list">
-              <li><ShieldCheck size={18} /> Local API processing</li>
-              <li><ShieldCheck size={18} /> Temporary files cleaned after download</li>
-              <li><ShieldCheck size={18} /> Upload limits and validation</li>
+              <li><ShieldCheck size={18} /> Private, secured processing</li>
+              <li><ShieldCheck size={18} /> Fast Cloudinary delivery</li>
+              <li><ShieldCheck size={18} /> Free to use, no signup</li>
             </ul>
           </div>
           <form className="tool-form" onSubmit={submit}>
             {hasFileInput && (
-              <label className="dropzone">
+              <label className={`dropzone ${files.length ? "compact" : ""}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); addFiles(event.dataTransfer.files); }}>
                 <UploadCloud size={34} />
-                <strong>{tool.multiple ? "Upload files" : "Upload file"}</strong>
-                <span>{tool.accept || "Any supported file"}</span>
-                <input type="file" accept={tool.accept} multiple={tool.multiple} onChange={(event) => setFiles(event.target.files)} />
+                <strong>{files.length ? (tool.multiple ? "Add more files" : "Replace file") : "Drop your file here"}</strong>
+                <span>or click to browse · {tool.accept || "Supported files"}</span>
+                <input ref={inputRef} type="file" accept={tool.accept} multiple={tool.multiple} onChange={(event) => addFiles(event.target.files)} />
               </label>
             )}
             {files.length > 0 && (
-              <div className="file-list">
-                {Array.from(files).map((file) => <span key={`${file.name}-${file.size}`}>{file.name}</span>)}
+              <div className="upload-summary">
+                <div className="upload-summary-head"><strong>{files.length} {files.length === 1 ? "file" : "files"} ready</strong>{tool.multiple && <button type="button" className="text-button" onClick={() => inputRef.current?.click()}><Plus size={16} /> Add</button>}</div>
+                <div className="file-preview-list">
+                  {files.map((item) => (
+                    <article className="file-preview" key={item.id}>
+                      <div className="preview-visual">
+                        {item.preview ? <img src={item.preview} alt={`Preview of ${item.file.name}`} /> : item.file.type === "application/pdf" ? <FileText /> : item.file.type.startsWith("image/") ? <Image /> : <File />}
+                      </div>
+                      <div className="preview-info"><strong title={item.file.name}>{item.file.name}</strong><span>{formatBytes(item.file.size)} · {item.file.type || "File"}</span></div>
+                      <button type="button" className="remove-file" aria-label={`Remove ${item.file.name}`} onClick={() => removeFile(item.id)}><Trash2 size={17} /></button>
+                    </article>
+                  ))}
+                </div>
               </div>
             )}
             <div className="field-grid">

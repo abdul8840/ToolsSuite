@@ -7,6 +7,7 @@ import { hashIp } from "../middleware/security.js";
 import { runTool, toolCatalog } from "../services/tools.js";
 import { ValidationError } from "../utils/errors.js";
 import { uploadToCloudinary } from "../services/cloudinary.js";
+import { env } from "../config/env.js";
 
 export async function listTools(_req, res) {
   res.json({ success: true, count: toolCatalog.length, tools: toolCatalog });
@@ -87,7 +88,7 @@ export async function runToolController(req, res, next) {
 }
 
 export async function sitemap(req, res) {
-  const origin = `${req.protocol}://${req.get("host")}`;
+  const origin = env.SITE_URL.replace(/\/$/, "") || `${req.protocol}://${req.get("host")}`;
   const urls = ["/", "/tools", ...toolCatalog.map((tool) => `/tools/${tool.slug}`)];
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls
     .map((url) => `  <url><loc>${origin}${url}</loc><changefreq>weekly</changefreq><priority>${url === "/" ? "1.0" : "0.8"}</priority></url>`)
@@ -96,6 +97,6 @@ export async function sitemap(req, res) {
 }
 
 export async function robots(req, res) {
-  const origin = `${req.protocol}://${req.get("host")}`;
+  const origin = env.SITE_URL.replace(/\/$/, "") || `${req.protocol}://${req.get("host")}`;
   res.type("text/plain").send(`User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: ${origin}/sitemap.xml\n`);
 }
