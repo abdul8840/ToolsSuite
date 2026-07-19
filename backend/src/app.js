@@ -24,6 +24,12 @@ app.get("/health", (_req, res) => {
   res.json({ success: true, status: "ok", storage: cloudinaryStatus(), timestamp: new Date().toISOString() });
 });
 
+app.get("/", (req, res) => {
+  res.status(200).json({
+    status: "OK",
+    message: "ToolsSuite Backend is running"
+  });
+});
 app.get("/sitemap.xml", sitemap);
 app.get("/robots.txt", robots);
 app.use("/api/tools", toolsRouter);
